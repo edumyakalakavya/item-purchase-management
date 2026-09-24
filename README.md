@@ -1,32 +1,44 @@
 # Item & Purchase Management System
 
-A web application designed for managing Item Categories (Item Types), Inventory Records (Item Master), and Multi-Item Purchase Orders with relational integrity, atomic transactions, and historical audit tracking.
+A web application designed for managing **Item Categories (Item Types)**, **Inventory Records (Item Master)**, and **Multi-Item Purchase Orders** with relational integrity, atomic transactions, and historical audit tracking.
 
-Built with **Node.js**, **Express.js**, **MySQL** (InnoDB), and a responsive **Vanilla HTML5 + CSS + JavaScript** frontend.
+Built with **Node.js**, **Express.js**, **MySQL (InnoDB)**, and a responsive **Vanilla HTML5 + CSS + JavaScript** frontend.
 
 ---
 
 ## 1. Project Overview & Business Rules
 
 1. **Item Types**: Manage product categories (`Electronics`, `Furniture`, `Stationery`, etc.). Unused categories can be deleted; categories linked to items are protected against deletion (`409 Conflict`).
+
 2. **Item Master**: Track items with Name, Category, Purchase Date, Current Stock, Availability Status (`In Stock`, `Low Stock`, `Out of Stock`), and Active/Inactive status.
+
 3. **Relational SQL JOINs**:
+
    * Item Master displays category names retrieved via `JOIN item_types`.
    * Purchase Details displays joined line items retrieved via a 4-table relational query (`purchases JOIN purchase_items JOIN items JOIN item_types`).
+
 4. **History-Safe Item Deletion**:
+
    * Items without purchase history can be physically deleted.
    * Items referenced by historical purchases are preserved and deactivated (`active = FALSE`) so historical order records remain intact.
+
 5. **Multi-Item Atomic Purchases**:
+
    * A single purchase order supports multiple items with positive quantities.
    * Atomic MySQL transactions with `FOR UPDATE` row-level locking validate stock availability and deduct quantities simultaneously.
    * If any item line fails validation or has insufficient stock, the transaction rolls back completely with zero stock modifications.
+
 6. **Stock Adjustment on Purchase Updates**:
-   * Updating order quantities recalculates stock using $\text{difference} = \text{new\_quantity} - \text{old\_quantity}$.
-   * Quantity increases deduct the difference from inventory (if stock is sufficient).
+
+   * Updating order quantities recalculates stock using:
+     `difference = new_quantity - old_quantity`
+   * Quantity increases deduct the difference from inventory when sufficient stock is available.
    * Quantity decreases restore the surplus difference to inventory.
+
 7. **Purchase Deletion Prohibited**:
-   * Purchases represent permanent audit records and **cannot be deleted**.
-   * No `DELETE` endpoint or frontend button exists.
+
+   * Purchases represent permanent audit records and cannot be deleted.
+   * No `DELETE` endpoint or frontend delete button exists for purchases.
 
 ---
 
@@ -56,33 +68,33 @@ TCS_Item_Purchase_Management/
 │   │   ├── itemTypeRoutes.js      # /api/item-types router
 │   │   ├── itemRoutes.js          # /api/items router
 │   │   └── purchaseRoutes.js      # /api/purchases router (NO DELETE route)
-│   ├── test-phase2.js             # Automated tests: Item Types & Items
-│   ├── test-phase3.js             # Automated tests: Purchase Creation & Stock Deduction
-│   ├── test-phase4.js             # Automated tests: Purchase Update & Stock Diffs
-│   ├── test-frontend-shell.js     # Automated tests: Frontend Shell & Static Delivery
-│   ├── test-phase5b.js            # Automated tests: Complete UI Components & JS Syntax
-│   ├── test-phase6.js             # Automated tests: Full End-to-End Integration
+│   ├── test-phase2.js             # Item Types & Items automated tests
+│   ├── test-phase3.js             # Purchase Creation & Stock Deduction tests
+│   ├── test-phase4.js             # Purchase Update & Stock Differential tests
+│   ├── test-frontend-shell.js     # Frontend Shell & Static Delivery tests
+│   ├── test-phase5b.js            # UI Components & JavaScript Syntax tests
+│   ├── test-phase6.js             # Full End-to-End Integration tests
 │   ├── server.js                  # Express app & static file serving
-│   ├── package.json               # Backend dependencies and scripts
-│   └── .env                       # Local database configuration
+│   └── package.json               # Backend dependencies and scripts
 ├── frontend/
 │   ├── index.html                 # Single-page interface with 4 views & modals
 │   ├── css/
-│   │   └── styles.css             # Clean styling (tables, modals, badges, alerts)
+│   │   └── styles.css             # Tables, modals, badges, alerts and layout
 │   └── js/
 │       ├── api.js                 # Centralized fetch wrapper
 │       ├── itemTypes.js           # Item Types frontend controller
 │       ├── items.js               # Item Master frontend controller
 │       ├── purchases.js           # Multi-item draft builder & creation controller
-│       └── purchaseDetails.js     # 4-table JOIN details & update controller
+│       └── purchaseDetails.js     # Purchase details & update controller
 ├── database/
-│   ├── schema.sql                 # DDL definitions (4 tables with InnoDB FKs)
-│   ├── seed.sql                   # Sample seed data matching Section 17
-│   └── init.js                    # Automated schema migration & seed script
+│   ├── schema.sql                 # DDL definitions with InnoDB foreign keys
+│   ├── seed.sql                   # Sample seed data
+│   └── init.js                    # Automated schema initialization & seed script
 ├── docs/
 │   ├── api-documentation.md       # Complete REST API reference
 │   └── screenshots/               # Application UI evidence
 ├── .env.example                   # Environment configuration template
+├── .gitignore                     # Git ignore rules
 └── README.md                      # Setup, execution, and verification guide
 ```
 
@@ -91,43 +103,59 @@ TCS_Item_Purchase_Management/
 ## 4. Database Setup & Initialization
 
 ### Prerequisites
-* MySQL Server 8.0 running locally on port `3306`.
+
+* MySQL Server 8.0 or later
+* MySQL running locally on port `3306`
+* Node.js installed
 
 ### Option A: Automated Script Setup (Recommended)
+
 Run the automated initialization script from the project root:
+
 ```bash
 cd TCS_Item_Purchase_Management
 node database/init.js
 ```
 
 ### Option B: Manual MySQL CLI Setup
+
 ```bash
 mysql -u root -p < database/schema.sql
 mysql -u root -p item_purchase_db < database/seed.sql
 ```
 
-### Seed Data Loaded:
-* **Item Types**:
-  * `1`: `Electronics`
-  * `2`: `Furniture`
-* **Items Master**:
-  * `1`: `Laptop` — Type: `Electronics`, Stock: `10`, Status: `Active`
-  * `2`: `Mouse` — Type: `Electronics`, Stock: `20`, Status: `Active`
-  * `3`: `Chair` — Type: `Furniture`, Stock: `15`, Status: `Active`
-* **Purchases**: `0` rows (clean initial state)
+### Seed Data Loaded
+
+**Item Types:**
+
+* `1`: `Electronics`
+* `2`: `Furniture`
+
+**Items:**
+
+* `1`: `Laptop` — Type: `Electronics`, Stock: `10`, Status: `Active`
+* `2`: `Mouse` — Type: `Electronics`, Stock: `20`, Status: `Active`
+* `3`: `Chair` — Type: `Furniture`, Stock: `15`, Status: `Active`
+
+**Purchases:**
+
+* `0` rows in the initial clean seed state
 
 ---
 
 ## 5. Configuration & Backend Startup
 
 ### 1. Configure Environment
-Copy `.env.example` to `backend/.env` (or project root):
+
+Copy `.env.example` to `backend/.env`:
+
 ```bash
 cd TCS_Item_Purchase_Management/backend
 cp ../.env.example .env
 ```
 
-Ensure `.env` matches your MySQL credentials:
+Update `.env` with your local MySQL credentials:
+
 ```env
 DB_HOST=localhost
 DB_PORT=3306
@@ -137,94 +165,163 @@ DB_NAME=item_purchase_db
 PORT=5000
 ```
 
+> The local `.env` file is intentionally excluded from Git through `.gitignore`.
+
 ### 2. Install Dependencies
+
 ```bash
 cd TCS_Item_Purchase_Management/backend
 npm install
 ```
 
 ### 3. Start the Server
-* Production mode:
-  ```bash
-  npm start
-  ```
-* Development mode (auto-reload on save):
-  ```bash
-  npm run dev
-  ```
 
-The server listens on `http://localhost:5000`.
+**Production mode:**
+
+```bash
+npm start
+```
+
+**Development mode:**
+
+```bash
+npm run dev
+```
+
+The server listens on:
+
+```text
+http://localhost:5000
+```
 
 ---
 
 ## 6. Accessing the Frontend Client
 
-Once the backend is started, open your web browser and navigate to:
+Once the backend is started, open a web browser and navigate to:
+
 ```text
 http://localhost:5000/
 ```
 
-The Express server serves the static frontend client directly. All API calls communicate with `http://localhost:5000/api`.
+The Express server serves the static frontend client directly.
+
+All API calls communicate with:
+
+```text
+http://localhost:5000/api
+```
 
 ---
 
 ## 7. REST API Overview
 
-Detailed request/response contracts are documented in [docs/api-documentation.md](file:///d:/projects/p1/TCS_Item_Purchase_Management/docs/api-documentation.md).
+Detailed request/response contracts are documented in [docs/api-documentation.md](docs/api-documentation.md).
 
-| Resource | Method | Endpoint | Description |
-| :--- | :--- | :--- | :--- |
-| **Health** | `GET` | `/api/health` | Health check endpoint |
-| **Item Types** | `GET` | `/api/item-types` | List all item categories |
-| | `POST` | `/api/item-types` | Create a category (unique name) |
-| | `PUT` | `/api/item-types/:id` | Update category name |
-| | `DELETE` | `/api/item-types/:id` | Delete unused category (returns 409 if items attached) |
-| **Items Master** | `GET` | `/api/items` | List all items (**JOIN** `item_types`) |
-| | `GET` | `/api/items/:id` | Get single item details (**JOIN** `item_types`) |
-| | `POST` | `/api/items` | Create item master record |
-| | `PUT` | `/api/items/:id` | Update item details or active status |
-| | `DELETE` | `/api/items/:id` | Deletes if unused; **deactivates** if purchase history exists |
-| **Purchases** | `GET` | `/api/purchases` | List historical purchases with item counts |
-| | `GET` | `/api/purchases/:id` | Purchase details (**Mandatory 4-table JOIN**) |
-| | `POST` | `/api/purchases` | Create purchase & deduct stock (**ACID Transaction**) |
-| | `PUT` | `/api/purchases/:id` | Update purchase quantities & adjust stock delta |
-| | `DELETE`| `/api/purchases/:id` | **PROHIBITED** (Returns 404 Not Found) |
+| Resource         | Method   | Endpoint              | Description                                                |
+| :--------------- | :------- | :-------------------- | :--------------------------------------------------------- |
+| **Health**       | `GET`    | `/api/health`         | Health check endpoint                                      |
+| **Item Types**   | `GET`    | `/api/item-types`     | List all item categories                                   |
+|                  | `POST`   | `/api/item-types`     | Create a category (unique name)                            |
+|                  | `PUT`    | `/api/item-types/:id` | Update category name                                       |
+|                  | `DELETE` | `/api/item-types/:id` | Delete unused category (returns 409 if items attached)     |
+| **Items Master** | `GET`    | `/api/items`          | List all items with `item_types` JOIN                      |
+|                  | `GET`    | `/api/items/:id`      | Get single item details with category JOIN                 |
+|                  | `POST`   | `/api/items`          | Create item master record                                  |
+|                  | `PUT`    | `/api/items/:id`      | Update item details or active status                       |
+|                  | `DELETE` | `/api/items/:id`      | Delete if unused; deactivate if purchase history exists    |
+| **Purchases**    | `GET`    | `/api/purchases`      | List historical purchases with item counts                 |
+|                  | `GET`    | `/api/purchases/:id`  | Purchase details using the required 4-table JOIN           |
+|                  | `POST`   | `/api/purchases`      | Create purchase and deduct stock using an ACID transaction |
+|                  | `PUT`    | `/api/purchases/:id`  | Update purchase quantities and adjust stock                |
+|                  | `DELETE` | `/api/purchases/:id`  | Prohibited; returns `404 Not Found`                        |
 
 ---
 
 ## 8. Automated Test Suite Execution
 
-The application includes comprehensive automated test suites covering all units, API endpoints, transactions, stock calculations, and UI components.
+The application includes automated test suites covering API endpoints, relational queries, validation rules, transactions, stock calculations, frontend components, and end-to-end workflows.
 
-Run all test suites from the project root:
+Run the test suites from the project root:
+
+### Phase 2 — Item Types & Items
 
 ```bash
-# Phase 2: Item Types & Items CRUD + SQL JOIN tests (17 tests)
 node TCS_Item_Purchase_Management/backend/test-phase2.js
+```
 
-# Phase 3: Purchase creation, validation & atomic stock deduction (14 tests)
+**17 tests**
+
+### Phase 3 — Purchase Creation & Stock Deduction
+
+```bash
 node TCS_Item_Purchase_Management/backend/test-phase3.js
+```
 
-# Phase 4: Purchase quantity updates & bidirectional stock differentials (14 tests)
+**14 tests**
+
+### Phase 4 — Purchase Updates & Stock Rebalancing
+
+```bash
 node TCS_Item_Purchase_Management/backend/test-phase4.js
+```
 
-# Phase 5A: Frontend shell & static asset delivery tests (15 tests)
+**14 tests**
+
+### Phase 5A — Frontend Shell & Static Delivery
+
+```bash
 node TCS_Item_Purchase_Management/backend/test-frontend-shell.js
+```
 
-# Phase 5B: Frontend components, script syntax & API binding tests (12 tests)
+**15 tests**
+
+### Phase 5B — Frontend Components & REST Integration
+
+```bash
 node TCS_Item_Purchase_Management/backend/test-phase5b.js
+```
 
-# Phase 6: Full end-to-end integration workflow test (19 tests)
+**12 tests**
+
+### Phase 6 — Full End-to-End Integration
+
+```bash
 node TCS_Item_Purchase_Management/backend/test-phase6.js
 ```
 
-### Expected Automated Test Totals
-* **Total Automated Tests**: **91 Passed, 0 Failed**
-* **Database State after tests**: Automatically reset and seeded to the clean Section 17 state.
+**19 tests**
+
+### Automated Test Summary
+
+| Test Phase |  Tests | Result                   |
+| :--------- | -----: | :----------------------- |
+| Phase 2    |     17 | Passed                   |
+| Phase 3    |     14 | Passed                   |
+| Phase 4    |     14 | Passed                   |
+| Phase 5A   |     15 | Passed                   |
+| Phase 5B   |     12 | Passed                   |
+| Phase 6    |     19 | Passed                   |
+| **Total**  | **91** | **91 Passed / 0 Failed** |
 
 ---
 
 ## 9. Verification Notice
 
-* **Automated Verification**: **Completed & Fully Passing** (all 91 tests executed and verified against MySQL).
-* **Manual Browser Verification**: **Pending User Inspection** (users are encouraged to open `http://localhost:5000/` in a desktop browser to click through tabs, modals, and forms).
+* **Automated Verification:** **Completed & Fully Passing** — all 91 automated tests were executed and verified against MySQL.
+* **Manual Browser Verification:** **Completed** — the application was manually inspected through the Item Master, Item Types, Create Purchase, Purchase History, and Purchase Details workflows.
+* **Visual Evidence:** Eight screenshots documenting the key workflows and final inventory state are available in [`docs/screenshots/`](docs/screenshots/).
+* **Purchase Workflow Verification:** The complete purchase workflow was manually verified, including order creation, confirmation, purchase history, purchase details, and stock deduction.
+
+### Visual Evidence
+
+The following screenshots are included in `docs/screenshots/`:
+
+1. `01-item-master.png` — Item Master
+2. `02-item-types.png` — Item Types
+3. `03-create-purchase-empty.png` — Create Purchase empty state
+4. `04-create-purchase-draft.png` — Multi-item purchase draft
+5. `05-purchase-confirmation.png` — Purchase confirmation dialog
+6. `06-purchase-history.png` — Purchase History
+7. `07-purchase-details.png` — Purchase Details
+8. `08-stock-after-purchase.png` — Item Master after stock deduction
