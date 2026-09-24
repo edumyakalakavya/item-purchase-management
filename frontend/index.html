@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Item & Purchase Management System</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <!-- Floating Toast Notification Container -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <div class="container">
+    <!-- Main Application Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="header-icon" aria-hidden="true">📦</div>
+        <div class="header-text">
+          <h1 class="app-title">Item &amp; Purchase Management</h1>
+          <p class="app-subtitle">Inventory &amp; Purchase Management System &mdash; Enterprise Edition</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="connection-pill online" id="connection-pill" title="Live status from /api/health">
+          <span class="status-dot"></span>
+          <span id="api-status-indicator">Connected (v1.0)</span>
+        </div>
+        <button class="btn btn-secondary btn-sm btn-header-action" id="btn-global-refresh" title="Refresh all application data">
+          <span>🔄</span> Refresh Data
+        </button>
+      </div>
+    </header>
+
+    <!-- Legacy In-Page Notification Banner (Kept for compatibility) -->
+    <div id="notification-banner" class="alert" role="alert"></div>
+
+    <!-- Navigation Tabs (Application Modules) -->
+    <nav class="nav-tabs" role="tablist" aria-label="Application Modules">
+      <button class="nav-tab active" data-tab="items" id="tab-items" role="tab" aria-selected="true">
+        <span class="tab-icon">📋</span> Item Master
+      </button>
+      <button class="nav-tab" data-tab="item-types" id="tab-item-types" role="tab" aria-selected="false">
+        <span class="tab-icon">🏷️</span> Item Types
+      </button>
+      <button class="nav-tab" data-tab="create-purchase" id="tab-create-purchase" role="tab" aria-selected="false">
+        <span class="tab-icon">🛒</span> Create Purchase
+      </button>
+      <button class="nav-tab" data-tab="purchase-history" id="tab-purchase-history" role="tab" aria-selected="false">
+        <span class="tab-icon">📜</span> Purchase History
+      </button>
+    </nav>
+
+    <!-- ========================================== -->
+    <!-- SECTION 1: ITEM MASTER                     -->
+    <!-- ========================================== -->
+    <section id="section-items" class="tab-content active" role="tabpanel">
+      <!-- Item Master Page Header -->
+      <div class="page-header">
+        <div class="page-title-group">
+          <h2 class="page-title"><span>📋</span> Item Master</h2>
+          <p class="page-subtitle">Manage inventory items, real-time stock levels, and category relationships</p>
+        </div>
+        <button class="btn btn-primary" id="btn-open-add-item">
+          <span>+</span> Add New Item
+        </button>
+      </div>
+
+      <!-- Compact Inventory Summary Statistics -->
+      <div class="inventory-stats-grid" aria-label="Inventory Statistics">
+        <div class="stat-card card-total">
+          <span class="stat-label">Total Items</span>
+          <span class="stat-value" id="stat-total-items">-</span>
+          <span class="stat-sub">Across all categories</span>
+        </div>
+        <div class="stat-card card-active">
+          <span class="stat-label">Active Items</span>
+          <span class="stat-value" id="stat-active-items">-</span>
+          <span class="stat-sub">Available for orders</span>
+        </div>
+        <div class="stat-card card-low">
+          <span class="stat-label">Low Stock</span>
+          <span class="stat-value" id="stat-low-stock">-</span>
+          <span class="stat-sub">1 – 5 units remaining</span>
+        </div>
+        <div class="stat-card card-out">
+          <span class="stat-label">Out of Stock</span>
+          <span class="stat-value" id="stat-out-of-stock">-</span>
+          <span class="stat-sub">Zero available units</span>
+        </div>
+      </div>
+
+      <!-- Main Item Table Card with Toolbar -->
+      <div class="card item-table-card">
+        <!-- Interactive Search & Filtering Toolbar -->
+        <div class="toolbar-container">
+          <div class="toolbar-group toolbar-search-group">
+            <input type="text" id="items-search" class="toolbar-input" placeholder="🔍 Search items...">
+          </div>
+          <div class="toolbar-group">
+            <select id="items-filter-type" class="toolbar-input">
+              <option value="">All Categories</option>
+            </select>
+          </div>
+          <div class="toolbar-group">
+            <select id="items-filter-status" class="toolbar-input">
+              <option value="">All Statuses</option>
+              <option value="1">Active</option>
+              <option value="0">Inactive</option>
+            </select>
+          </div>
+          <div class="toolbar-group">
+            <select id="items-filter-avail" class="toolbar-input">
+              <option value="">All Stock Levels</option>
+              <option value="in">In Stock (> 5)</option>
+              <option value="low">Low Stock (1-5)</option>
+              <option value="out">Out of Stock (0)</option>
+            </select>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-reset-item-filters" title="Reset Filters">
+            Reset
+          </button>
+        </div>
+
+        <!-- States -->
+        <div id="items-loading" class="state-message">Loading inventory...</div>
+        <div id="items-empty" class="empty-state-card" style="display: none;">
+          <div class="empty-state-icon">📦</div>
+          <h3>No items found</h3>
+          <p>Try changing your search or filters.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-reset-filters-empty" style="margin-top: 12px;">Reset Filters</button>
+        </div>
+
+        <!-- Data Table -->
+        <div class="table-responsive" id="items-table-container" style="display: none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 80px;">Item ID</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Purchase Date</th>
+                <th style="text-align: right;">Current Stock</th>
+                <th>Availability</th>
+                <th>Status</th>
+                <th style="text-align: center; width: 190px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="items-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SECTION 2: ITEM TYPES                      -->
+    <!-- ========================================== -->
+    <section id="section-item-types" class="tab-content" role="tabpanel">
+      <!-- Item Types Page Header -->
+      <div class="page-header">
+        <div class="page-title-group">
+          <h2 class="page-title"><span>🏷️</span> Item Types</h2>
+          <p class="page-subtitle">Define and manage inventory categories used across the item master</p>
+        </div>
+        <div class="header-kpi-card" aria-label="Item Types KPI">
+          <span class="kpi-label">TOTAL ITEM TYPES</span>
+          <span class="kpi-value" id="stat-total-types">2</span>
+          <span class="kpi-sub">Active inventory categories</span>
+        </div>
+      </div>
+
+      <!-- Add / Edit Item Type Workspace Card -->
+      <div class="card item-type-form-card">
+        <div class="card-header-simple">
+          <h3 class="card-title" id="item-type-form-title"><span>🏷️</span> Add Item Type</h3>
+          <p class="card-subtitle">Create a category to organize inventory items.</p>
+        </div>
+        
+        <form id="item-type-form" class="form-inline" style="margin-top: 14px;">
+          <input type="hidden" id="item-type-id" value="">
+          <div class="form-group item-type-input-group">
+            <label for="item-type-name">Type Name *</label>
+            <input type="text" id="item-type-name" placeholder="e.g. Stationery" required>
+          </div>
+          <div class="form-actions-inline">
+            <button type="submit" class="btn btn-primary" id="item-type-submit-btn">Save Item Type</button>
+            <button type="button" class="btn btn-secondary" id="item-type-cancel-btn" style="display: none;">Cancel</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Existing Item Types Table Card -->
+      <div class="card item-types-table-card">
+        <div class="card-header-simple">
+          <h3 class="card-title">Existing Item Types</h3>
+          <p class="card-subtitle">Categories currently available for inventory classification.</p>
+        </div>
+
+        <div id="item-types-loading" class="state-message">Loading item types...</div>
+        <div id="item-types-empty" class="empty-state-card" style="display: none;">
+          <div class="empty-state-icon">🏷️</div>
+          <h3>No item types found</h3>
+          <p>Create an item type to begin organizing your inventory.</p>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-focus-add-type" style="margin-top: 12px;">+ Add Item Type</button>
+        </div>
+
+        <div class="table-responsive" id="item-types-table-container" style="display: none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 70px; text-align: center;">ID</th>
+                <th>Type Name</th>
+                <th style="width: 170px; text-align: center;">Associated Items</th>
+                <th style="width: 150px; text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="item-types-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SECTION 3: CREATE PURCHASE                 -->
+    <!-- ========================================== -->
+    <section id="section-create-purchase" class="tab-content" role="tabpanel">
+      <!-- Create Purchase Page Header -->
+      <div class="page-header">
+        <div class="page-title-group">
+          <h2 class="page-title"><span>🛒</span> Create Purchase</h2>
+          <p class="page-subtitle">Create purchase orders with real-time inventory validation and atomic stock deduction</p>
+        </div>
+        <div class="header-kpi-card" aria-label="Purchase Order Builder Status">
+          <span class="kpi-label">ORDER BUILDER</span>
+          <span class="kpi-value" style="font-size: 20px;">Ready</span>
+          <span class="kpi-sub">Stock validated in real time</span>
+        </div>
+      </div>
+
+      <!-- 1. Order Details Card -->
+      <div class="card purchase-order-details-card">
+        <div class="card-header-simple">
+          <h3 class="card-title">Order Details</h3>
+          <p class="card-subtitle">Enter the purchase order information before adding inventory items.</p>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group" style="flex: 1; min-width: 240px; margin-bottom: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="purchase-order-id" style="margin-bottom: 0;">Order ID</label>
+              <span class="badge-helper">Optional · Auto-generated</span>
+            </div>
+            <input type="text" id="purchase-order-id" placeholder="e.g. PO-00001">
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 240px; margin-bottom: 0;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="purchase-order-date" style="margin-bottom: 0;">Purchase Date *</label>
+              <span class="badge-helper badge-helper-required">Required</span>
+            </div>
+            <input type="date" id="purchase-order-date" required>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Purchase Builder Workspace Card -->
+      <div class="card purchase-builder-card">
+        <div class="card-header-simple">
+          <h3 class="card-title">Add Items to Purchase Order</h3>
+          <p class="card-subtitle">Select active inventory items and specify the quantity to purchase.</p>
+        </div>
+
+        <div class="purchase-builder-layout">
+          <!-- Left Workspace: Item Selector & Draft Items Table -->
+          <div class="purchase-workspace-main">
+            <!-- Item Selection Toolbar -->
+            <div class="purchase-builder-toolbar">
+              <div class="form-row purchase-toolbar-row">
+                <div class="form-group purchase-select-group">
+                  <label for="purchase-item-select">Select Active Item *</label>
+                  <select id="purchase-item-select">
+                    <option value="">-- Choose an Active Item --</option>
+                  </select>
+                </div>
+
+                <div class="form-group purchase-qty-group">
+                  <label for="purchase-item-qty">Quantity *</label>
+                  <input type="number" id="purchase-item-qty" min="1" placeholder="Qty">
+                </div>
+
+                <div class="form-group purchase-stock-indicator-group">
+                  <label>Available Stock</label>
+                  <div id="purchase-stock-indicator" class="purchase-stock-indicator stock-indicator-none">
+                    Select an item to view available stock
+                  </div>
+                </div>
+
+                <div class="form-group purchase-add-btn-group">
+                  <button type="button" class="btn btn-primary" id="btn-add-to-order">+ Add to Order</button>
+                </div>
+              </div>
+              <div id="purchase-draft-error" class="alert alert-error" style="display: none; margin-top: 12px; margin-bottom: 0;"></div>
+            </div>
+
+            <!-- Current Order Items Section -->
+            <div class="purchase-draft-section">
+              <div class="draft-section-header">
+                <h4 class="draft-section-title">Current Order Items</h4>
+                <p class="draft-section-subtitle">Review quantities and inventory impact before submitting the purchase order.</p>
+              </div>
+
+              <!-- Empty state -->
+              <div id="purchase-draft-empty" class="empty-state-card purchase-empty-state">
+                <div class="empty-state-icon">📦</div>
+                <h3>No items added yet</h3>
+                <p>Select an active inventory item above and click “Add to Order” to begin building your purchase order.</p>
+              </div>
+
+              <!-- Draft Table -->
+              <div class="table-responsive" id="purchase-draft-table-container" style="display: none;">
+                <table class="data-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 75px; text-align: center;">Item ID</th>
+                      <th>Item Name</th>
+                      <th style="width: 130px;">Category</th>
+                      <th style="text-align: right; width: 120px;">Available</th>
+                      <th style="text-align: center; width: 130px;">Order Quantity</th>
+                      <th style="text-align: center; width: 140px;">Stock Status</th>
+                      <th style="text-align: center; width: 90px;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody id="purchase-draft-table-body">
+                    <!-- Populated dynamically -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Sidebar: Live Order Summary -->
+          <div class="summary-card purchase-summary-card">
+            <div>
+              <div class="summary-card-header">
+                <h3 class="summary-card-title">Order Summary</h3>
+                <span class="badge-helper">Live Impact</span>
+              </div>
+
+              <div class="summary-metrics-list">
+                <div class="summary-item">
+                  <span>Distinct Lines:</span>
+                  <strong id="summary-unique-items">0</strong>
+                </div>
+                <div class="summary-item">
+                  <span>Total Units:</span>
+                  <strong id="summary-total-qty">0 units</strong>
+                </div>
+                <div class="summary-item">
+                  <span>Inventory Impact:</span>
+                  <span id="summary-impact-badge" class="badge badge-inactive">Draft Empty</span>
+                </div>
+              </div>
+
+              <div class="summary-highlight-card">
+                <span class="highlight-label">TOTAL UNITS</span>
+                <span class="highlight-value" id="summary-total-display">0</span>
+                <span class="highlight-sub">units to be deducted</span>
+              </div>
+            </div>
+
+            <div class="purchase-actions-group">
+              <button type="button" class="btn btn-primary btn-submit-order" id="btn-submit-purchase" disabled>
+                <span>✓</span> Submit Purchase Order
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-draft">
+                Clear Draft
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- SECTION 4: PURCHASE HISTORY                -->
+    <!-- ========================================== -->
+    <section id="section-purchase-history" class="tab-content" role="tabpanel">
+      <!-- Purchase History Page Header -->
+      <div class="page-header">
+        <div class="page-title-group">
+          <h2 class="page-title"><span>📜</span> Purchase History</h2>
+          <p class="page-subtitle">Review completed purchase orders, inventory changes, and permanent audit history.</p>
+        </div>
+        <div class="header-kpi-card" aria-label="Purchase History KPI">
+          <span class="kpi-label">TOTAL PURCHASES</span>
+          <span class="kpi-value" id="stat-total-purchases">0</span>
+          <span class="kpi-sub">Historical orders</span>
+        </div>
+      </div>
+
+      <!-- Purchase Statistics Row -->
+      <div class="inventory-stats-grid purchase-history-stats">
+        <div class="stat-card card-purchases">
+          <span class="stat-label">Total Orders</span>
+          <span class="stat-value" id="history-stat-orders">0</span>
+          <span class="stat-sub">Lifetime orders</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Units</span>
+          <span class="stat-value" id="history-stat-units">0</span>
+          <span class="stat-sub">Cumulative volume</span>
+        </div>
+        <div class="stat-card card-active">
+          <span class="stat-label">Unique Items</span>
+          <span class="stat-value" id="history-stat-unique-items">0</span>
+          <span class="stat-sub">Distinct items purchased</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Latest Order</span>
+          <span class="stat-value" id="history-stat-latest" style="font-size: 18px; line-height: 1.5;">No orders yet</span>
+          <span class="stat-sub" id="history-stat-latest-date">No purchases recorded</span>
+        </div>
+      </div>
+
+      <!-- Audit Notice Banner -->
+      <div class="purchase-audit-banner">
+        <span class="audit-icon">🔒</span>
+        <div class="audit-text">
+          <strong>Purchase Audit Notice:</strong>
+          <span>Purchase records are permanent historical records. Purchase deletion is not permitted.</span>
+        </div>
+      </div>
+
+      <!-- Purchase History Table Card -->
+      <div class="card purchase-history-card">
+        <div class="card-header-simple">
+          <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div>
+              <h3 class="card-title"><span>📜</span> Completed Purchase Orders</h3>
+              <p class="card-subtitle">Complete chronological record of received inventory purchase orders.</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span class="badge-helper">Permanent Audit Trail</span>
+              <button class="btn btn-secondary btn-sm" id="btn-refresh-purchases" title="Refresh Purchases">
+                <span>🔄</span> Refresh
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search & Filter Toolbar -->
+        <div class="toolbar-container purchase-history-toolbar">
+          <div class="toolbar-group toolbar-search-group">
+            <input type="text" id="purchases-search" class="toolbar-input" placeholder="🔍 Search Order ID...">
+          </div>
+          <div class="toolbar-group">
+            <input type="date" id="purchases-filter-date" class="toolbar-input" title="Filter by Purchase Date">
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-reset-purchase-filters">Reset Filters</button>
+        </div>
+
+        <!-- States -->
+        <div id="purchases-loading" class="state-message">Loading purchase history...</div>
+        <div id="purchases-empty" class="empty-state-card purchase-empty-state" style="display: none;">
+          <div class="empty-state-icon">📜</div>
+          <h3>No Purchase History Yet</h3>
+          <p>Completed purchase orders will appear here after the first purchase is submitted.</p>
+          <p style="font-size: 12px; color: var(--text-light); margin-top: 4px;">Purchase records are retained permanently for audit purposes.</p>
+          <button type="button" class="btn btn-primary btn-sm" id="btn-goto-create-purchase" style="margin-top: 14px;">
+            Go to Create Purchase
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="table-responsive" id="purchases-table-container" style="display: none;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width: 140px;">Order ID</th>
+                <th style="width: 140px;">Purchase Date</th>
+                <th style="width: 130px;">Items</th>
+                <th style="text-align: right; width: 130px;">Total Units</th>
+                <th style="width: 180px;">Created At</th>
+                <th style="text-align: center; width: 200px;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="purchases-table-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <div>&copy; 2026 Item & Purchase Management System | Assignment Deliverable</div>
+      <div>Designed for Reliability, Data Integrity, and Transaction Safety</div>
+    </footer>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 1: ADD / EDIT ITEM                   -->
+  <!-- ========================================== -->
+  <div id="item-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="item-modal-title">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="item-modal-title">Add New Item</h3>
+        <button class="modal-close-btn" data-close-modal="item-modal" aria-label="Close modal">&times;</button>
+      </div>
+      <form id="item-form">
+        <input type="hidden" id="item-id" value="">
+        <div class="form-group">
+          <label for="item-name">Item Name *</label>
+          <input type="text" id="item-name" required placeholder="e.g. Ergonomic Office Chair">
+        </div>
+        <div class="form-group">
+          <label for="item-type-select">Category / Item Type *</label>
+          <select id="item-type-select" required>
+            <option value="">-- Select Item Type --</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="item-date">Acquisition / Purchase Date *</label>
+            <input type="date" id="item-date" required>
+          </div>
+          <div class="form-group">
+            <label for="item-stock">Current Stock Available *</label>
+            <input type="number" id="item-stock" min="0" step="1" required placeholder="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="item-status">Active Status *</label>
+          <select id="item-status" required>
+            <option value="1">Active (Can be ordered)</option>
+            <option value="0">Inactive (Excluded from orders)</option>
+          </select>
+        </div>
+        <div id="item-form-error" class="alert alert-error" style="display: none;"></div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="item-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-item">Save Item</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 2: ITEM DETAILS VIEW                 -->
+  <!-- ========================================== -->
+  <div id="item-details-modal" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="item-details-modal-title">Item Details</h3>
+        <button class="modal-close-btn" data-close-modal="item-details-modal" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="detail-grid" id="item-details-content">
+        <!-- Dynamically populated -->
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="item-details-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- ========================================== -->
+  <!-- MODAL 3: PURCHASE DETAILS (4-TABLE JOIN)   -->
+  <!-- ========================================== -->
+  <div id="purchase-details-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="purchase-details-title">
+    <div class="modal-box" style="max-width: 820px;">
+      <div class="modal-header">
+        <h3 id="purchase-details-title">Purchase Order Details</h3>
+        <button class="modal-close-btn" data-close-modal="purchase-details-modal" aria-label="Close modal">&times;</button>
+      </div>
+      <div class="detail-grid purchase-details-meta" id="purchase-details-header">
+        <!-- Order header info -->
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin: 20px 0 10px 0; flex-wrap: wrap; gap: 8px;">
+        <div>
+          <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin: 0;">Purchased Line Items</h4>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">Relational line items populated from mandatory 4-table SQL JOIN</p>
+        </div>
+        <span class="badge badge-active">Permanent Audit Record</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width: 80px; text-align: center;">Item ID</th>
+              <th>Item Name</th>
+              <th style="width: 130px;">Category</th>
+              <th style="text-align: right; width: 140px;">Quantity Ordered</th>
+              <th style="text-align: right; width: 160px;">Current Stock</th>
+            </tr>
+          </thead>
+          <tbody id="purchase-details-items-body">
+            <!-- Dynamically populated from 4-table SQL JOIN -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="purchase-details-modal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 4: EDIT PURCHASE ORDER               -->
+  <!-- ========================================== -->
+  <div id="purchase-edit-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="purchase-edit-title">
+    <div class="modal-box" style="max-width: 820px;">
+      <div class="modal-header">
+        <h3 id="purchase-edit-title">Edit Purchase Order</h3>
+        <button class="modal-close-btn" data-close-modal="purchase-edit-modal" aria-label="Close modal">&times;</button>
+      </div>
+      <form id="purchase-edit-form">
+        <input type="hidden" id="edit-purchase-id" value="">
+        <div class="form-row">
+          <div class="form-group" style="flex: 1; min-width: 220px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="edit-order-id" style="margin-bottom: 0;">Order ID</label>
+              <span class="badge-helper">Immutable</span>
+            </div>
+            <input type="text" id="edit-order-id" readonly style="background-color: #f8fafc; font-weight: 700; color: var(--primary-color);">
+          </div>
+          <div class="form-group" style="flex: 1; min-width: 220px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label for="edit-purchase-date" style="margin-bottom: 0;">Purchase Date *</label>
+              <span class="badge-helper badge-helper-required">Required</span>
+            </div>
+            <input type="date" id="edit-purchase-date" required>
+          </div>
+        </div>
+
+        <div style="margin: 18px 0 10px 0;">
+          <h4 style="font-size: 14px; font-weight: 700; color: var(--text-main); margin: 0;">Order Quantities & Stock Adjustment</h4>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 2px 0 0 0;">
+            Adjusting quantities calculates <code>difference = new_qty - old_qty</code> and updates stock atomically.
+          </p>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Item Name</th>
+                <th style="width: 120px;">Category</th>
+                <th style="text-align: right; width: 110px;">Available</th>
+                <th style="text-align: right; width: 100px;">Old Qty</th>
+                <th style="text-align: center; width: 140px;">New Qty</th>
+                <th style="width: 170px;">Stock Impact</th>
+              </tr>
+            </thead>
+            <tbody id="purchase-edit-items-body">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+
+        <div id="purchase-edit-error" class="alert alert-error" style="display: none; margin-top: 14px;"></div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-close-modal="purchase-edit-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-purchase-edit">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODAL 5: UNIVERSAL CONFIRMATION DIALOG     -->
+  <!-- ========================================== -->
+  <div id="confirm-modal" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-box" style="max-width: 440px;">
+      <div class="modal-header">
+        <h3 id="confirm-modal-title">Confirm Action</h3>
+        <button class="modal-close-btn" data-close-modal="confirm-modal" aria-label="Close modal">&times;</button>
+      </div>
+      <div id="confirm-modal-body" style="font-size: 14px; color: var(--text-main); margin-bottom: 20px;">
+        Are you sure you want to proceed?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-close-modal="confirm-modal" id="btn-confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn-danger" id="btn-confirm-action">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Modules -->
+  <script src="js/api.js"></script>
+  <script src="js/itemTypes.js"></script>
+  <script src="js/items.js"></script>
+  <script src="js/purchases.js"></script>
+  <script src="js/purchaseDetails.js"></script>
+
+  <!-- Global Application Orchestration -->
+  <script>
+    // Modern Floating Toast Notification System
+    window.showToast = function(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      if (!container) return;
+
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      const iconMap = {
+        success: '✓',
+        error: '✕',
+        warning: '⚠',
+        info: 'ℹ'
+      };
+
+      toast.innerHTML = `
+        <span style="font-weight: 700; color: var(--${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'}-color);">${iconMap[type] || '•'}</span>
+        <div class="toast-message">${escapeHtml(message)}</div>
+        <button class="toast-close" aria-label="Dismiss">&times;</button>
+      `;
+
+      container.appendChild(toast);
+
+      const dismiss = () => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateX(40px)';
+        setTimeout(() => toast.remove(), 250);
+      };
+
+      toast.querySelector('.toast-close').addEventListener('click', dismiss);
+      setTimeout(dismiss, 5000);
+    };
+
+    // Backward-compatible notification function
+    window.showNotification = function(message, type = 'success') {
+      window.showToast(message, type);
+
+      const banner = document.getElementById('notification-banner');
+      if (banner) {
+        banner.textContent = message;
+        banner.className = `alert alert-${type === 'error' ? 'error' : 'success'}`;
+        banner.style.display = 'block';
+        clearTimeout(window._notificationTimer);
+        window._notificationTimer = setTimeout(() => {
+          banner.style.display = 'none';
+        }, 5000);
+      }
+    };
+
+    // Universal Modal Helper
+    window.openModal = function(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.add('active');
+    };
+
+    window.closeModal = function(modalId) {
+      const modal = document.getElementById(modalId);
+      if (modal) modal.classList.remove('active');
+    };
+
+    // Custom Confirmation Dialog (Replaces browser confirm)
+    window.customConfirm = function(title, message, confirmBtnText = 'Confirm', isDestructive = true) {
+      return new Promise((resolve) => {
+        const modal = document.getElementById('confirm-modal');
+        const titleEl = document.getElementById('confirm-modal-title');
+        const bodyEl = document.getElementById('confirm-modal-body');
+        const actionBtn = document.getElementById('btn-confirm-action');
+        const cancelBtn = document.getElementById('btn-confirm-cancel');
+
+        titleEl.textContent = title;
+        bodyEl.innerHTML = message;
+        actionBtn.textContent = confirmBtnText;
+        actionBtn.className = isDestructive ? 'btn btn-danger' : 'btn btn-primary';
+
+        const cleanup = () => {
+          actionBtn.removeEventListener('click', onConfirm);
+          cancelBtn.removeEventListener('click', onCancel);
+          window.closeModal('confirm-modal');
+        };
+
+        const onConfirm = () => { cleanup(); resolve(true); };
+        const onCancel = () => { cleanup(); resolve(false); };
+
+        actionBtn.addEventListener('click', onConfirm);
+        cancelBtn.addEventListener('click', onCancel);
+        window.openModal('confirm-modal');
+      });
+    };
+
+    // Close buttons handlers
+    document.querySelectorAll('[data-close-modal]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.closeModal(btn.getAttribute('data-close-modal'));
+      });
+    });
+
+    document.querySelectorAll('.modal-overlay').forEach(modal => {
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
+      });
+    });
+
+    // Refresh Dashboard Statistics Helper
+    window.refreshDashboardStats = async function() {
+      try {
+        const [itemsRes, typesRes, purchasesRes] = await Promise.all([
+          window.api.get('/items'),
+          window.api.get('/item-types'),
+          window.api.get('/purchases')
+        ]);
+
+        const items = itemsRes.data || [];
+        const types = typesRes.data || [];
+        const purchases = purchasesRes.data || [];
+
+        // 1. Total Items
+        const elTotalItems = document.getElementById('stat-total-items');
+        if (elTotalItems) elTotalItems.textContent = items.length;
+
+        // 2. Active Items
+        const activeCount = items.filter(i => i.active).length;
+        const elActiveItems = document.getElementById('stat-active-items');
+        if (elActiveItems) elActiveItems.textContent = activeCount;
+
+        // 3. Low Stock (1 - 5 units)
+        const lowCount = items.filter(i => i.stock_available > 0 && i.stock_available <= 5).length;
+        const elLowStock = document.getElementById('stat-low-stock');
+        if (elLowStock) elLowStock.textContent = lowCount;
+
+        // 4. Out of Stock (0 units)
+        const outCount = items.filter(i => i.stock_available === 0).length;
+        const elOutOfStock = document.getElementById('stat-out-of-stock');
+        if (elOutOfStock) elOutOfStock.textContent = outCount;
+
+        // 5. Total Types
+        const elTotalTypes = document.getElementById('stat-total-types');
+        if (elTotalTypes) elTotalTypes.textContent = types.length;
+
+        // 6. Total Purchases
+        const elTotalPurchases = document.getElementById('stat-total-purchases');
+        if (elTotalPurchases) elTotalPurchases.textContent = purchases.length;
+
+        // Update Purchase History Mini-Stats if available
+        const histOrders = document.getElementById('history-stat-orders');
+        const histUnits = document.getElementById('history-stat-units');
+        const histLatest = document.getElementById('history-stat-latest');
+        const histLatestDate = document.getElementById('history-stat-latest-date');
+
+        if (histOrders) histOrders.textContent = purchases.length;
+        if (histUnits) {
+          const totalUnits = purchases.reduce((sum, p) => sum + (p.total_quantity || 0), 0);
+          histUnits.textContent = totalUnits;
+        }
+        if (histLatest && purchases.length > 0) {
+          histLatest.textContent = purchases[0].order_id;
+          histLatestDate.textContent = `Date: ${purchases[0].purchase_date}`;
+        }
+
+      } catch (err) {
+        console.error('Failed to update dashboard statistics:', err);
+      }
+    };
+
+    // Tab Navigation Logic
+    document.addEventListener('DOMContentLoaded', () => {
+      const tabs = document.querySelectorAll('.nav-tab');
+      const sections = document.querySelectorAll('.tab-content');
+
+      tabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          const targetTab = tab.getAttribute('data-tab');
+
+          tabs.forEach(t => t.classList.remove('active'));
+          tab.classList.add('active');
+
+          sections.forEach(section => {
+            if (section.id === `section-${targetTab}`) {
+              section.classList.add('active');
+            } else {
+              section.classList.remove('active');
+            }
+          });
+
+          // Trigger view-specific reloads
+          if (targetTab === 'items' && window.loadItems) window.loadItems();
+          if (targetTab === 'item-types' && window.loadItemTypes) window.loadItemTypes();
+          if (targetTab === 'create-purchase' && window.populateItemSelector) window.populateItemSelector();
+          if (targetTab === 'purchase-history' && window.loadPurchases) window.loadPurchases();
+          window.refreshDashboardStats();
+        });
+      });
+
+      // Global Refresh Button
+      document.getElementById('btn-global-refresh').addEventListener('click', async () => {
+        if (window.loadItems) await window.loadItems();
+        if (window.loadItemTypes) await window.loadItemTypes();
+        if (window.loadPurchases) await window.loadPurchases();
+        if (window.populateItemSelector) await window.populateItemSelector();
+        await window.refreshDashboardStats();
+        window.showToast('All inventory and purchase data refreshed', 'info');
+      });
+
+      // Backend Connection Health Polling
+      const checkHealth = () => {
+        const pill = document.getElementById('connection-pill');
+        const text = document.getElementById('api-status-indicator');
+
+        window.api.get('/health')
+          .then(res => {
+            if (res && res.status === 'OK') {
+              pill.className = 'connection-pill online';
+              text.textContent = 'Connected (v1.0)';
+            } else {
+              pill.className = 'connection-pill offline';
+              text.textContent = 'Degraded';
+            }
+          })
+          .catch(() => {
+            pill.className = 'connection-pill offline';
+            text.textContent = 'Offline';
+          });
+      };
+
+      checkHealth();
+      setInterval(checkHealth, 30000); // Check every 30 seconds
+
+      // Initialize all domain modules
+      if (window.initItemTypes) window.initItemTypes();
+      if (window.initItems) window.initItems();
+      if (window.initPurchases) window.initPurchases();
+      if (window.initPurchaseDetails) window.initPurchaseDetails();
+      window.refreshDashboardStats();
+    });
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
